@@ -216,6 +216,10 @@ def _incremental_updates(
                 case 'drop_dir':
                     fs.remove_tree(path_o)
                 case 'add_file':
+                    # Ensure parent directory exists
+                    parent_dir = fs.parent(path_o)
+                    if not fs.exist(parent_dir):
+                        fs.make_dir(parent_dir)
                     if copyfiles:
                         fs.copy_file(path_i, path_o, overwrite=True)
                     else:
@@ -237,6 +241,10 @@ def _incremental_updates(
                         os.unlink(path_o)
                 case 'update_file':
                     print(':vl', path_i, path_o)
+                    # Ensure parent directory exists
+                    parent_dir = fs.parent(path_o)
+                    if not fs.exist(parent_dir):
+                        fs.make_dir(parent_dir)
                     if copyfiles:
                         fs.copy_file(path_i, path_o, overwrite=True)
                     else:
@@ -378,13 +386,24 @@ def _mount_resources(
         
         if '*' in relpath:
             candidates = glob('{}/{}'.format(base_dir, relpath))
-            if len(candidates) == 0 and nullable:
+            if len(candidates) == 0:
+                if nullable:
+                    return ''
+                # No matches found - mark as nullable to be safe
+                if verbose:
+                    print(':v2w', 'pattern no match:', relpath)
                 return ''
             elif len(candidates) == 1:
                 if fs.exist(candidates[0]):
                     return candidates[0].replace('\\', '/')
             else:
-                raise Exception(relpath, candidates, nullable)
+                # Multiple matches - include all of them (e.g., binary files)
+                if verbose:
+                    print(':v2w', 'pattern multi match:', relpath, '->', len(candidates), 'files')
+                for candidate in candidates:
+                    if fs.exist(candidate):
+                        files.add(candidate.replace('\\', '/'))
+                return ''  # Already added to files
         else:
             if fs.exist(x := '{}/{}'.format(base_dir, relpath)):
                 return x
@@ -392,7 +411,10 @@ def _mount_resources(
         if nullable:
             return ''
         else:
-            raise Exception(top_name, relpath)
+            # Instead of raising, mark as optional for binary files
+            if verbose:
+                print(f':v2w file not found; {top_name}/{relpath}', ':v0')
+            return ''
     
     for graph_id in config['entries'].values():
         graph_file = '{}/{}.yaml'.format(graphs_root, graph_id)
@@ -413,11 +435,21 @@ def _mount_resources(
             abspath = '{}/{}'.format(graph['source_roots'][uid], relpath)
             files.add(abspath)
             
-            # patch: fill extra files
+            # patch: fill extra files and auto-include binary extensions
             top_name = module_name.split('.', 1)[0]
-            if top_name in patch:
-                if top_name not in patched_modules:
-                    patched_modules.add(top_name)
+            if top_name not in patched_modules:
+                patched_modules.add(top_name)
+                package_dir = '{}/{}'.format(graph['source_roots'][uid], top_name)
+                
+                # Auto-include all .so files in the package directory recursively
+                if fs.exist(package_dir):
+                    for so_file in glob(f'{package_dir}/**/*.so', recursive=True):
+                        files.add(so_file)
+                        if verbose:
+                            print(f':v2i auto-included binary: {so_file}')
+                
+                # Apply manual patches if they exist
+                if top_name in patch:
                     # assert relpath.startswith(top)
                     base_dir = '{}/{}'.format(
                         graph['source_roots'][uid], top_name

@@ -279,6 +279,38 @@ toga:
 tracerite:
   files:
     - style.css
+requests_toolbelt:
+  files:
+    - multipart/
+zstandard:
+  files:
+    - backend_cffi.py
+opentelemetry:
+  files:
+    - context/contextvars_context.py
+pydantic:
+  files:
+    - alias_generators.py
+    - aliases.py
+    - annotated_handlers.py
+    - json_schema.py
+    - networks.py
+    - types.py
+    - v1/
+pydantic_settings:
+  files:
+    - sources/
+sqlalchemy:
+  files:
+    - dialects/
+botocore:
+  files:
+    - retries/
+    - docs/
+    - data/
+boto3:
+  files:
+    - data/
 tree_shaking:
   files:
     - _cache/dumped_resources_maps/.gitkeep
